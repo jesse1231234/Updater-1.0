@@ -1,6 +1,6 @@
 # ---------- deps ----------
 FROM node:20-alpine AS deps
-# OpenSSL for Prisma engines; pnpm via corepack
+# Prisma engines need OpenSSL on Alpine; pnpm via corepack
 RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
@@ -10,7 +10,7 @@ COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 
-# Avoid prisma generate during install (schema not copied yet)
+# Avoid early prisma generate (schema not copied yet)
 ENV PRISMA_SKIP_POSTINSTALL_GENERATE=true
 
 # Install all deps without running postinstall scripts
@@ -23,8 +23,6 @@ RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@9 --a
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-# ⬇️ critical: prevent prisma CLI from trying `pnpm add` in CI
-ENV PRISMA_SKIP_AUTOINSTALL=1
 
 # Bring installed deps
 COPY --from=deps /app/node_modules ./node_modules
@@ -32,10 +30,16 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy full source
 COPY . .
 
-# Generate Prisma client (ephemeral CLI; no writes to your lockfile)
-RUN npx -y prisma@5.22.0 generate --schema=apps/api/prisma/schema.prisma
+# --- Important: install prisma CLI (and ensure client) only inside the image ---
+# This updates package.json/lockfile IN THE IMAGE (not your repo) so prisma is available to exec.
+# If @prisma/client is already in your apps/api dependencies, the second "add" is a no-op.
+RUN pnpm -C apps/api add -D prisma@5.22.0
+RUN pnpm -C apps/api add @prisma/client@5.22.0
 
-# Build both apps (root "build" runs api+web builds)
+# Generate Prisma client now that schema exists and prisma CLI is present
+RUN pnpm -C apps/api exec prisma generate --schema prisma/schema.prisma
+
+# Build both apps (your root "build" should run api+web builds)
 RUN pnpm -r build
 
 
@@ -48,8 +52,6 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV NEST_PORT=4000
 ENV NEXT_TELEMETRY_DISABLED=1
-# ⬇️ also skip autoinstall at runtime (for migrate)
-ENV PRISMA_SKIP_AUTOINSTALL=1
 
 # Bring deps and built artifacts
 COPY --from=build /app/node_modules ./node_modules
@@ -68,5 +70,5 @@ COPY --from=build /app/packages ./packages
 
 EXPOSE 3000 4000
 
-# 1) run DB migrations (ephemeral CLI), 2) start Nest (bg) on 4000, 3) start Next on 3000
-CMD ["/bin/sh","-lc", "npx -y prisma@5.22.0 migrate deploy --schema=apps/api/prisma/schema.prisma || true; node apps/api/dist/main.js & pnpm -C apps/web start"]
+# 1) run DB migrations, 2) start Nest (bg) on 4000, 3) start Next on 3000
+CMD ["/bin/sh","-lc", "pnpm -C apps/api exec prisma migrate deploy --schema prisma/schema.prisma || true; node apps/api/dist/main.js & pnpm -C apps/web start"]
