@@ -5,4 +5,4 @@ dist
 .next
 coverage
 .prisma
-pnpm-lock.yaml
+!pnpm-lock.yaml
