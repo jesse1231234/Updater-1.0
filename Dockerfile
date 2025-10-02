@@ -1,6 +1,6 @@
 # ---------- deps ----------
 FROM node:20-alpine AS deps
-# Prisma needs OpenSSL on Alpine; pnpm via corepack
+# OpenSSL for Prisma engines; pnpm via corepack
 RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
@@ -24,14 +24,14 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Bring installed deps (root is enough for pnpm workspaces)
+# Bring installed deps
 COPY --from=deps /app/node_modules ./node_modules
 
 # Copy full source
 COPY . .
 
-# Now the schema exists → generate Prisma client
-RUN pnpm -C apps/api exec prisma generate
+# Now schema exists → generate Prisma client (no local prisma CLI needed)
+RUN pnpm dlx prisma@5.22.0 generate --schema=apps/api/prisma/schema.prisma
 
 # Build both apps (root "build" should run api+web builds)
 RUN pnpm -r build
@@ -64,5 +64,5 @@ COPY --from=build /app/packages ./packages
 
 EXPOSE 3000 4000
 
-# 1) migrate DB safely, 2) start Nest on :4000 (bg), 3) start Next on :3000
-CMD ["/bin/sh","-lc", "pnpm -C apps/api exec prisma migrate deploy || true; node apps/api/dist/main.js & pnpm -C apps/web start"]
+# 1) run DB migrations (using dlx), 2) start Nest (bg) on 4000, 3) start Next on 3000
+CMD ["/bin/sh","-lc", "pnpm dlx prisma@5.22.0 migrate deploy --schema=apps/api/prisma/schema.prisma || true; node apps/api/dist/main.js & pnpm -C apps/web start"]
