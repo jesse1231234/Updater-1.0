@@ -26,7 +26,12 @@ WORKDIR /app
 
 ENV NODE_ENV=production PORT=3000 NEST_PORT=4000 NEXT_TELEMETRY_DISABLED=1
 
+# Bring deps and built artifacts
 COPY --from=build /app/node_modules ./node_modules
+# ⬇️ add these two lines
+COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=build /app/apps/web/node_modules ./apps/web/node_modules
+
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/web/.next ./apps/web/.next
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json
