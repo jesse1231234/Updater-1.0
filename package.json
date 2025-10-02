@@ -4,16 +4,13 @@
   "packageManager": "pnpm@9.0.0",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "postinstall": "pnpm -C apps/api prisma generate",
-    "prebuild": "pnpm -C apps/api prisma generate",
+    "prebuild": "pnpm -C apps/api prisma generate --schema apps/api/prisma/schema.prisma",
     "build": "pnpm -r --filter ./apps/** build",
-
-    "dev": "concurrently -k -n api,web -c blue,green \"pnpm -C apps/api dev\" \"pnpm -C apps/web dev\"",
 
     "prestart": "pnpm prisma:deploy",
     "start": "concurrently -k -n api,web -c blue,green \"pnpm -C apps/api start\" \"pnpm -C apps/web start\"",
 
-    "prisma:deploy": "pnpm -C apps/api prisma migrate deploy"
+    "prisma:deploy": "pnpm -C apps/api prisma migrate deploy --schema apps/api/prisma/schema.prisma"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
