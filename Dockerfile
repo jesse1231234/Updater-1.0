@@ -29,7 +29,6 @@ ENV NODE_ENV=production PORT=3000 NEST_PORT=4000 NEXT_TELEMETRY_DISABLED=1
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/web/.next ./apps/web/.next
-COPY --from=build /app/apps/web/public ./apps/web/public
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json
 COPY --from=build /app/apps/web/package.json ./apps/web/package.json
 COPY --from=build /app/apps/api/prisma ./apps/api/prisma
