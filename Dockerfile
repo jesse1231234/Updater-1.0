@@ -10,11 +10,11 @@ COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 
-# Avoid early prisma generate (schema not copied yet)
-ENV PRISMA_SKIP_POSTINSTALL_GENERATE=true
+# IMPORTANT: copy Prisma schema BEFORE install so @prisma/client postinstall can run
+COPY apps/api/prisma/ apps/api/prisma/
 
-# Install all deps without running postinstall scripts
-RUN pnpm install --frozen-lockfile --ignore-scripts
+# Install all deps (allow postinstall so Prisma client generates)
+RUN pnpm install --frozen-lockfile
 
 
 # ---------- build ----------
@@ -24,28 +24,20 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Bring installed deps
+# Bring installed deps (already contains generated @prisma/client)
 COPY --from=deps /app/node_modules ./node_modules
 
 # Copy full source
 COPY . .
 
-# --- Important: install prisma CLI (and ensure client) only inside the image ---
-# This updates package.json/lockfile IN THE IMAGE (not your repo) so prisma is available to exec.
-# If @prisma/client is already in your apps/api dependencies, the second "add" is a no-op.
-RUN pnpm -C apps/api add -D prisma@5.22.0
-RUN pnpm -C apps/api add @prisma/client@5.22.0
-
-# Generate Prisma client now that schema exists and prisma CLI is present
-RUN pnpm -C apps/api exec prisma generate --schema prisma/schema.prisma
-
-# Build both apps (your root "build" should run api+web builds)
+# Build both apps (your root "build" runs api+web builds)
 RUN pnpm -r build
 
 
 # ---------- runtime ----------
 FROM node:20-alpine AS runner
-RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@9 --activate
+# OpenSSL for Prisma engines; install pnpm + (globally) prisma CLI for migrations
+RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@9 --activate && npm i -g prisma@5.22.0
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -70,5 +62,5 @@ COPY --from=build /app/packages ./packages
 
 EXPOSE 3000 4000
 
-# 1) run DB migrations, 2) start Nest (bg) on 4000, 3) start Next on 3000
-CMD ["/bin/sh","-lc", "pnpm -C apps/api exec prisma migrate deploy --schema prisma/schema.prisma || true; node apps/api/dist/main.js & pnpm -C apps/web start"]
+# 1) run DB migrations (global prisma CLI), 2) start Nest (bg) on 4000, 3) start Next on 3000
+CMD ["/bin/sh","-lc", "prisma migrate deploy --schema=apps/api/prisma/schema.prisma || true; node apps/api/dist/main.js & pnpm -C apps/web start"]
