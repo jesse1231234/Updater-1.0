@@ -1,15 +1,16 @@
 # ---------- deps ----------
 FROM node:20-alpine AS deps
+# Prisma needs OpenSSL on Alpine; pnpm via corepack
 RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
-# Copy manifests + lockfile first (cache-friendly)
+# Copy workspace manifests + lockfile first (cache-friendly)
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 
-# Prevent prisma postinstall from running before schema is present
+# Avoid prisma generate during install (schema not copied yet)
 ENV PRISMA_SKIP_POSTINSTALL_GENERATE=true
 
 # Install all deps without running postinstall scripts
@@ -23,25 +24,22 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Bring installed deps (root and per-workspace node_modules)
+# Bring installed deps (root is enough for pnpm workspaces)
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
-COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
 
 # Copy full source
 COPY . .
 
-# Now schema exists → generate Prisma client (use pnpm exec)
+# Now the schema exists → generate Prisma client
 RUN pnpm -C apps/api exec prisma generate
 
-# Build both apps (your root build handles api+web)
+# Build both apps (root "build" should run api+web builds)
 RUN pnpm -r build
 
 
 # ---------- runtime ----------
 FROM node:20-alpine AS runner
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -49,11 +47,8 @@ ENV PORT=3000
 ENV NEST_PORT=4000
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Bring deps and built artifacts (root + per-workspace node_modules)
+# Bring deps and built artifacts
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=build /app/apps/web/node_modules ./apps/web/node_modules
-COPY --from=build /app/packages/shared/node_modules ./packages/shared/node_modules
 
 # NestJS build output
 COPY --from=build /app/apps/api/dist ./apps/api/dist
