@@ -1,6 +1,6 @@
 # ---------- deps ----------
 FROM node:20-alpine AS deps
-# Prisma engines need OpenSSL on Alpine; pnpm via corepack
+# OpenSSL for Prisma engines; pnpm via corepack
 RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
@@ -23,6 +23,8 @@ RUN apk add --no-cache openssl && corepack enable && corepack prepare pnpm@9 --a
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# ⬇️ critical: prevent prisma CLI from trying `pnpm add` in CI
+ENV PRISMA_SKIP_AUTOINSTALL=1
 
 # Bring installed deps
 COPY --from=deps /app/node_modules ./node_modules
@@ -30,10 +32,10 @@ COPY --from=deps /app/node_modules ./node_modules
 # Copy full source
 COPY . .
 
-# Generate Prisma client (ephemeral CLI via npx; no repo changes)
+# Generate Prisma client (ephemeral CLI; no writes to your lockfile)
 RUN npx -y prisma@5.22.0 generate --schema=apps/api/prisma/schema.prisma
 
-# Build both apps (your root "build" runs api+web builds)
+# Build both apps (root "build" runs api+web builds)
 RUN pnpm -r build
 
 
@@ -46,6 +48,8 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV NEST_PORT=4000
 ENV NEXT_TELEMETRY_DISABLED=1
+# ⬇️ also skip autoinstall at runtime (for migrate)
+ENV PRISMA_SKIP_AUTOINSTALL=1
 
 # Bring deps and built artifacts
 COPY --from=build /app/node_modules ./node_modules
