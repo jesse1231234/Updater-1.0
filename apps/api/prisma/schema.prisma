@@ -1,77 +1,112 @@
-generator client { provider = "prisma-client-js" }
-datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+generator client {
+  provider = "prisma-client-js"
+}
 
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
 
-enum RunStatus { pending preview applying migrating done failed }
-enum ItemType { page assignment discussion }
-enum ItemStatus { pending preview applied skipped error }
+enum RunStatus {
+  pending
+  preview
+  applying
+  migrating
+  done
+  failed
+}
 
+enum ItemType {
+  page
+  assignment
+  discussion
+}
+
+enum ItemStatus {
+  pending
+  preview
+  applied
+  skipped
+  error
+}
 
 model User {
-id String @id @default(cuid())
-email String @unique
-role String @default("editor")
-createdAt DateTime @default(now())
-runs Run[]
-}
+  id        String   @id @default(cuid())
+  email     String   @unique
+  role      String   @default("editor")
+  createdAt DateTime @default(now())
+  runs      Run[]
 
+  @@index([email])
+}
 
 model Run {
-id String @id @default(cuid())
-startedByUserId String
-startedBy User @relation(fields: [startedByUserId], references: [id])
-sisCourseId String
-courseIdCache Int?
-prompt String
-model String @default("gpt-4.1-mini")
-dpMode Boolean @default(true)
-portability Boolean @default(true)
-destSisCourseId String?
-status RunStatus @default(pending)
-createdAt DateTime @default(now())
-completedAt DateTime?
-costTokens Int @default(0)
-costUsdCents Int @default(0)
-budgetCapUsdCents Int @default(500)
-items RunItem[]
-logs Log[]
-}
+  id                String     @id @default(cuid())
+  startedByUserId   String
+  startedBy         User       @relation(fields: [startedByUserId], references: [id])
+  sisCourseId       String
+  courseIdCache     Int?
+  prompt            String
+  model             String     @default("gpt-4.1-mini")
+  dpMode            Boolean    @default(true)
+  portability       Boolean    @default(true)
+  destSisCourseId   String?
+  status            RunStatus  @default(pending)
+  createdAt         DateTime   @default(now())
+  completedAt       DateTime?
+  costTokens        Int        @default(0)
+  costUsdCents      Int        @default(0)
+  budgetCapUsdCents Int        @default(500)
+  items             RunItem[]
+  logs              Log[]
 
+  @@index([startedByUserId])
+  @@index([sisCourseId])
+}
 
 model RunItem {
-id String @id @default(cuid())
-runId String
-run Run @relation(fields: [runId], references: [id])
-moduleId Int?
-moduleItemId Int
-itemType ItemType
-itemRefId Int
-title String
-originalHash String
-status ItemStatus @default(pending)
-errorMsg String?
-diffSummary String?
-backups Backup[]
-}
+  id           String     @id @default(cuid())
+  runId        String
+  run          Run        @relation(fields: [runId], references: [id])
+  moduleId     Int?
+  moduleItemId Int
+  itemType     ItemType
+  itemRefId    Int
+  title        String
+  originalHash String
+  status       ItemStatus @default(pending)
+  errorMsg     String?
+  diffSummary  String?
+  backups      Backup[]
 
+  @@index([runId])
+  @@index([moduleId, moduleItemId])
+  @@index([itemType, itemRefId])
+}
 
 model Backup {
-id String @id @default(cuid())
-courseId Int
-itemType ItemType
-itemRefId Int
-html String
-version Int
-createdAt DateTime @default(now())
+  id        String   @id @default(cuid())
+  runItemId String
+  runItem   RunItem  @relation(fields: [runItemId], references: [id])
+  courseId  Int
+  itemType  ItemType
+  itemRefId Int
+  html      String
+  version   Int
+  createdAt DateTime @default(now())
+
+  @@index([runItemId])
+  @@index([courseId, itemType, itemRefId])
 }
 
-
 model Log {
-id String @id @default(cuid())
-runId String
-run Run @relation(fields: [runId], references: [id])
-level String
-message String
-metaJson Json?
-ts DateTime @default(now())
+  id       String   @id @default(cuid())
+  runId    String
+  run      Run      @relation(fields: [runId], references: [id])
+  level    String
+  message  String
+  metaJson Json?
+  ts       DateTime @default(now())
+
+  @@index([runId])
 }
