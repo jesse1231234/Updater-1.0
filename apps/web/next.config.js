@@ -1,3 +1,12 @@
-@@ -0,0 +1,2 @@
 /** @type {import('next').NextConfig} */
-module.exports = { reactStrictMode: true };
+const nextConfig = {
+  reactStrictMode: true,
+  async rewrites() {
+    return [
+      // proxy browser calls to Nest inside the container
+      { source: '/api/:path*', destination: 'http://localhost:4000/:path*' },
+    ];
+  },
+  output: 'standalone',
+};
+module.exports = nextConfig;
