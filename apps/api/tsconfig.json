@@ -9,11 +9,8 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
 
-    // 👇 Required for Nest legacy decorators
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-
-    // Helps avoid class field semantics surprises with Nest
     "useDefineForClassFields": false,
 
     "types": ["node"],
